@@ -82,10 +82,14 @@ ollama_model = "llama3.2"
 
 def rms(chunk):
     # Volume of on audio chunk in int16 samples
-    return float(np.sqrt(np.mean(chunk.astype(np.float32) ** 2)))
+    x = chunk.astype(np.float32)
+    x -= x.mean()
+    return float(np.sqrt(np.mean(x ** 2)))
 
 def calibrate(stream, seconds=1.0):
     # Measuring the background noise so silence is relative to the room
+    for _ in range(int(1.0 * SAMPLERATE / BLOCKSIZE)):
+        stream.read(BLOCKSIZE)
     print("Calibrating background noise, stay quiet")
     levels = []
     for _ in range(int(seconds * SAMPLERATE / BLOCKSIZE)):
@@ -94,6 +98,11 @@ def calibrate(stream, seconds=1.0):
     threshold = max(np.mean(levels) * SILENCE_MARGIN, MIN_THRESHHOLD)
     print(f"Speech threshold: {threshold:.0f}")
     return threshold
+
+def flush(stream):
+    n = stream.read_available
+    if n:
+        stream.read(n)
 
 def record_until_silence(stream, threshold, no_speech_timeout=NO_SPEECH_TIMEOUT):
     # recording chunks until you stop talking and recognises silence to switch to idle
@@ -108,6 +117,7 @@ def record_until_silence(stream, threshold, no_speech_timeout=NO_SPEECH_TIMEOUT)
     for i in range(max_chunks):
         chunk, _ = stream.read(BLOCKSIZE)
         chunk = chunk[:, 0]
+        # print(f"level {rms(chunk):6.0f}   threshold {threshold:.0f}")
         chunks.append(chunk)
 
         if rms(chunk) > threshold:
@@ -124,7 +134,11 @@ def record_until_silence(stream, threshold, no_speech_timeout=NO_SPEECH_TIMEOUT)
     return np.concatenate(chunks)
 
 def transcribe(audio_int16):
-    audio = audio_int16.astype(np.float32) / 32768.0
+    audio = audio_int16.astype(np.float32)
+    audio -= audio.mean()
+    peak = np.abs(audio).max()
+    if peak > 0:
+        audio = audio / peak * 0.7
     segments, info = whisper_model.transcribe(audio, language=LANGUAGE)
     return " ".join(segment.text for segment in segments).strip()
 
@@ -198,12 +212,11 @@ with sd.InputStream(samplerate=SAMPLERATE, channels=1, blocksize=BLOCKSIZE, dtyp
                         print("No answer, back to sleep")
                         break
                     else:
-                        stream.stop()
                         print("Transcribing")
                         text = transcribe(audio)
 
                         if not text:
-                            stream.start()
+                            flush(stream)
                             misses += 1
                             if misses >= 2:
                                 break
@@ -218,7 +231,7 @@ with sd.InputStream(samplerate=SAMPLERATE, channels=1, blocksize=BLOCKSIZE, dtyp
                         print("Responding now")
                         responding(text)
                         print("\n")
-                        stream.start()
+                        flush(stream)
                         timeout = FOLLOWUP_TIMEOUT
                 
                 # SLEEP
