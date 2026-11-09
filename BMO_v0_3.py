@@ -43,8 +43,8 @@ NOT_EXIT            = True                                  # Break has to now s
 SENTENCE_END        = re.compile(r'[.!?]+["\')\]]*\s+|\n+') # So BMO can say individual sentences
 MIN_SENTENCE        = 12                                    # Minimum size for a sentence
 
-EYES_PATH           = "/home/insomniac/Projects/BMO/assets/eyes/"                        # Asset paths for BMOs face
-MOUTH_PATH          = "/home/insomniac/Projects/BMO/assets/mouth/"
+EYES_PATH           = "/home/insomnia/Projects/BMO/assets/eyes/"                        # Asset paths for BMOs face
+MOUTH_PATH          = "/home/insomnia/Projects/BMO/assets/mouth/"
 WIDTH               = 1024                                  # Screen size for pygame
 HEIGHT              = 600
 FPS                 = 60
