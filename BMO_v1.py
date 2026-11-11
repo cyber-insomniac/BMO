@@ -117,7 +117,7 @@ mouths = {
     "bored"     : ["bored1.png", "bored2.png"]
 }
 
-songs = ["macarena.wav", "hit_me_baby.wav", "wannabe.wav"]
+songs = ["macarena.wav", "hit_me_baby.wav", "wannabe.wav", "dragula.wav"]
 
 # Tools
 
@@ -134,6 +134,7 @@ def play_music():
     pick = random.choice(songs)
     data, samplerate = sf.read(f"{SONG_PATH}{pick}")
     sd.play(data, samplerate)
+    print(pick.removesuffix(".wav"))
     return
 
 def play_video():
