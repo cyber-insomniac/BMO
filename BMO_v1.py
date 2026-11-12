@@ -117,7 +117,7 @@ mouths = {
     "bored"     : ["bored1.png", "bored2.png"]
 }
 
-songs = ["macarena.wav", "hit_me_baby.wav", "wannabe.wav", "dragula.wav"]
+songs = ["hit_me_baby.wav"]
 
 # Tools
 
@@ -132,7 +132,7 @@ def print_sticker():
 def play_music():
     """Play a song"""
     pick = random.choice(songs)
-    data, samplerate = sf.read(f"{SONG_PATH}{pick}")
+    data, samplerate = sf.read(f"{SONG_PATH}hit_me_baby.wav")
     sd.play(data, samplerate)
     print(pick.removesuffix(".wav"))
     return
