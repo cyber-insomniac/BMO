@@ -72,6 +72,8 @@ MAX_MESSAGES        = 16                                    # limiting memory
 MAX_CHARS           = 6000                                  # for the summary
 NORMAL_VOL          = 0.5
 DUCK_VOL            = 0.12
+VIDEO_DUCK          = 50
+VIDEO_NORMAL        = 100
 
 EYES_PATH           = "/home/insomniac/Projects/BMO/assets/eyes/"                        # Asset paths for BMOs face
 MOUTH_PATH          = "/home/insomniac/Projects/BMO/assets/mouth/"
@@ -88,6 +90,7 @@ BORED               = "bored"
 SLEEP_PHRASES       = ("stop", "go to sleep", "good night", "goodnight")
 SHUTDOWN_PHRASES    = ("shut down", "shutdown", "power off", "turn off", "exit", "kill yourself")
 STOP_MUSIC_PHRASES  = ("stop the music", "stop music", "music off", "turn off the music", "turn the music off", "pause the music")
+STOP_VIDEO_PHRASES = ("stop the video", "stop video", "video off", "turn off the video", "close the video")
 FILE_NAMES          = {".wav", ".mp4"}
 
 pygame.init()
@@ -218,7 +221,6 @@ class Videos:
         self.files = sorted(p for p in Path(folder).glob("*") if p.suffix.lower() in FILE_NAMES)
         self.current = None
         self.started = False
-        self.socket = None
         self.process = None
         self.ipc_path = "/tmp/bmo_mpv.sock"
 
@@ -228,53 +230,69 @@ class Videos:
             artist, title = (p.strip() for p in name.split(" - ", 1))
             return f"{title} by {artist}"
         return name 
+    
+    def playing(self):
+        return self.process is not None and self.process.poll() is None
 
     def play(self, query):
         if not self.files:
-            return "There are no music files in the music folder."
+            return "There are no video files in the video folder."
+        music.stop()
+        self.stop()
         q = _norm(query)
         matches = [f for f in self.files if q and q != "random" and q in _norm(f.stem)]
         path = random.choice(matches or self.files)
+        try:
+            os.unlink(self.ipc_path)
+        except FileNotFoundError:
+            pass
         self.process = subprocess.Popen([
             "mpv",
             "--fullscreen",
             "--ontop",
             "--no-border",
+            "--no-terminal",
             #"--force-window=yes",
-            "--input-ipc-server=" + self.ipc_path,
-            path
+            f"--volume={VIDEO_DUCK}",
+            f"--input-ipc-server={self.ipc_path}",
+            str(path)
         ])
-        self.socket = socket.socket(socket.AF_UNIX)
-        self.socket.connect(self.ipc_path)
         self.current, self.started = path, True
         note = "" if matches or q in ("", "random") else "I could not find that video, so I picked another. "
         return f"{note}Now playing: {self._describe(path)}"
 
     def command(self, *args):
-        message = json.dumps({
-            "command": list(args)
-        }) + "\n"
-        
-        self.socket.sendall(message.encode())
+        if not self.playing():
+            return
+        try:
+            with socket.socket(socket.AF_UNIX) as s:
+                s.settimeout(1)
+                s.connect(self.ipc_path)
+                s.sendall((json.dumps({"command": list(args)}) + "\n").encode())
+        except OSError:
+            pass
 
     def now_playing(self):
-        return f"Now playing: {self._describe(self.current)}" if self.playing() and self.current else "No video is playing."
+        if self.playing() and self.current:
+            return f"Now playing: {self._describe(self.current)}"
+        return "No video is playing."
 
     def stop(self):
-        if self.process and self.process.poll() is None:
+        was_playing = self.playing()
+        if was_playing:
             self.command("quit")
-            self.process.wait()
-            self.process = None
-            self.socket.close()
-            self.socket = None
-
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.process.terminate()
+        self.process = None
         return "The video is stopped." if was_playing else "No video was playing."
 
     def duck(self):
-        self.command("set_property", "volume", DUCK_VOL)
+        self.command("set_property", "volume", VIDEO_DUCK)
 
     def restore(self):
-        self.command("set_property", "volume", NORMAL_VOL)
+        self.command("set_property", "volume", VIDEO_NORMAL)
 
 videos = Videos()
 
@@ -288,12 +306,18 @@ def play_video(video:str) -> str:
 
 def whats_playing() -> str:
     """Tell which song or video is currently playing."""
-    return music.whats_playing() if music.started  else videos.whats_playing()
+    if music.playing():
+        return music.now_playing()
+    if videos.playing():
+        return videos.now_playing()
+    return "Nothing is playing."
 
 def stop_video() -> str:
     """Stop the video that is playing."""
     return videos.stop()
 
+def media_playing():
+    return music.playing() or videos.playing()
 
 
 
@@ -534,7 +558,7 @@ class BackEnd:
 
                 while not self.stop.is_set():
                     #SLEEP
-                    self.state = "bored" if music.playing() OR videos.started else "sleeping"
+                    self.state = "bored" if media_playing() else "sleeping"
                     chunk, _ = stream.read(BLOCKSIZE)
                     chunk = chunk[:,0]
                     buffer = np.concatenate((buffer[len(chunk):], chunk))
@@ -553,7 +577,7 @@ class BackEnd:
                     self.conversation(stream, threshold)
                     music.restore()
                     videos.restore()
-                    self.state = "bored" if music.playing() OR music.started else "sleeping"
+                    self.state = "bored" if media_playing() else "sleeping"
                     self.update_summary
                     self.flush(stream)
                     buffer[:] = 0
@@ -581,8 +605,9 @@ class BackEnd:
                 continue
             misses = 0
 
-            if self.matches(text, STOP_MUSIC_PHRASES):
+            if self.matches(text, STOP_MUSIC_PHRASES + STOP_VIDEO_PHRASES):
                 music.stop()
+                videos.stop()
                 self.speech_q.join()
                 return
             if self.is_shutdown_command(text):
@@ -596,8 +621,9 @@ class BackEnd:
             print("BMO:", reply)
 
             self.speech_q.join()
-            if music.started:
+            if music.started or videos.started:
                 music.started =  False
+                videos.started = False
                 return
             self.flush(stream)
             timeout = FOLLOWUP_TIMEOUT
