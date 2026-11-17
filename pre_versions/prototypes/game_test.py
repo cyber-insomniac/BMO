@@ -5,7 +5,7 @@ pygame.init()
 WIDTH = 1024
 HEIGHT = 600
 FPS = 60
-
+FONT = pygame.font.Font(None, 72)
 
 class Pong:
     def __init__(self):
@@ -16,8 +16,9 @@ class Pong:
         self._player1_rect = pygame.Rect((10, HEIGHT // 2), (50, 200))
         self._player2_rect = pygame.Rect((964, HEIGHT // 2), (50, 200))
         self._ball_speed = 10
+        self._ball_radius = 20
         self._player_speed = 5
-        self._comp1_speed = 4
+        self._comp1_speed = 2
         self._comp2_speed = 3
         self._size = (50,50)
         self._direction_x = 1
@@ -26,8 +27,9 @@ class Pong:
         self._ball_y = 0
         self._score_1 = 0
         self._score_2 = 0
+        self._aim_error = random.randint(-40, 40)
 
-    def run(self, mode):
+    def run(self, mode: str = None):
         try:
             while self._run:
                 self.events()
@@ -37,21 +39,42 @@ class Pong:
         except KeyboardInterrupt:
             pass
 
-    def update(self, mode):
+    def update(self, mode: str = None):
         if mode == "player":
             self.player()
         else:
-            pass
-        self.dumb_comp()
+            self.dumb_comp()
+        self.smart_comp()
         self.ball()
 
     def dumb_comp(self):
-        if self._player2_rect.y != self._ball_y:
-            if self._direction_y <= 0:
-                self._player2_rect.y -= self._comp2_speed
-            else:
-                self._player2_rect.y += self._comp2_speed
+        if self._player1_rect.y != self._ball_y:
+            if self._player1_rect.y >= 0 or self._player1_rect.y <= HEIGHT:
+                if self._direction_y <= 0:
+                    self._player1_rect.y -= self._comp2_speed
+                else:
+                    self._player1_rect.y += self._comp2_speed
+        self._player1_rect.clamp_ip(pygame.Rect(0, 0, WIDTH, HEIGHT))
 
+    def fold(self, y, top, bottom):
+        span = bottom - top
+        y = (y - top) % (2 * span)
+        if y > span:
+            y = 2 * span - y
+        return y + top
+
+    def smart_comp(self):
+        if self._direction_x > 0:
+            dx = self._player2_rect.left - self._ball_radius - self._ball_x
+            raw_y = self._ball_y + (self._direction_y / self._direction_x) * dx
+            target = self.fold(raw_y, self._ball_radius, HEIGHT - self._ball_radius)
+        else:
+            target = HEIGHT / 2
+
+        target += self._aim_error
+        diff = target - self._player2_rect.centery
+        self._player2_rect.centery += max(-self._comp1_speed, min(self._comp1_speed, diff))
+        self._player2_rect.clamp_ip(pygame.Rect(0,0, WIDTH, HEIGHT))
 
     def player(self):
         keys = pygame.key.get_pressed()
@@ -76,29 +99,27 @@ class Pong:
         self.direction()
 
     def score(self):
-        if self._ball_x == 0:
-            self._score_1 += 1
-
-        if self._ball_x == 1024:
+        if self._ball_x <= 0:
             self._score_2 += 1
 
-        print(f"player 1: {self._score_1} \nplayer 2: {self._score_2}")
+        if self._ball_x >= 1024:
+            self._score_1 += 1
+
+        #print(f"player 1: {self._score_1} \nplayer 2: {self._score_2}")
 
     def collide(self):
         # Y
-        if self._ball_y - 20 <= 0:
-            self._ball_y = 20
+        if self._ball_y - self._ball_radius <= 0:
+            self._ball_y = self._ball_radius
             self._direction_y = abs(self._direction_y)
-        elif self._ball_y + 20 >= 600:
-            self._ball_y = 580
+        elif self._ball_y + self._ball_radius >= 600:
+            self._ball_y = HEIGHT - self._ball_radius
             self._direction_y = -abs(self._direction_y)
 
         # Player
-        if self._player1_rect.collidepoint((self._ball_x - 20), self._ball_y):
-            #self._ball_x = 30
+        if self._player1_rect.collidepoint((self._ball_x - self._ball_radius), self._ball_y):
             self._direction_x = abs(self._direction_x)
-        elif self._player2_rect.collidepoint((self._ball_x + 20), self._ball_y):
-            #self._ball_x = 994
+        elif self._player2_rect.collidepoint((self._ball_x + self._ball_radius), self._ball_y):
             self._direction_x = -abs(self._direction_x)
 
     def ball(self):
@@ -107,7 +128,7 @@ class Pong:
             self.reset_ball()
             return
 
-        if self._ball_x <= 0 or self._ball_x >= 1024:
+        if self._ball_x <= 0 or self._ball_x >= WIDTH:
             self.score()
             self.reset_ball()
             return
@@ -123,8 +144,10 @@ class Pong:
         self._screen.fill("#d9ffea")
         pygame.draw.rect(self._screen, "#63bda4", self._player1_rect)
         pygame.draw.rect(self._screen, "#63bda4", self._player2_rect)
-        pygame.draw.circle(self._screen, "#63bda4", (self._ball_x, self._ball_y), 20)
+        pygame.draw.circle(self._screen, "#63bda4", (self._ball_x, self._ball_y), self._ball_radius)
+        self._screen.blit(FONT.render(str(self._score_1), True, "#63bda4"), ((WIDTH // 2) - 50 , 50))
+        self._screen.blit(FONT.render(str(self._score_2), True, "#63bda4"), ((WIDTH // 2) + 50 , 50))
         pygame.display.update()
 
 g = Pong()
-g.run("player")
+g.run()
