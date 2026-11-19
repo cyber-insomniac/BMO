@@ -150,4 +150,4 @@ class Pong:
         pygame.display.update()
 
 g = Pong()
-g.run()
+g.run("player")
