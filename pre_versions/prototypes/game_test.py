@@ -20,7 +20,7 @@ class Pong:
         self._player_speed = 5
         self._comp1_speed = 2
         self._comp2_speed = 3
-        self._size = (50,50)
+        #self._size = (50,50)
         self._direction_x = 1
         self._direction_y = 1
         self._ball_x = 0
