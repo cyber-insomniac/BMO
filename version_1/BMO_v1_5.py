@@ -36,7 +36,6 @@ Conversation loop:
 
 import numpy as np
 import sounddevice as sd
-import soundfile as sf
 from livekit.wakeword import WakeWordModel
 from faster_whisper import WhisperModel
 from ollama import chat
