@@ -14,6 +14,9 @@ import threading
 import queue
 import traceback
 
+def clean_for_speech(text):
+    return re.sub(r"[*_#`~]", "", text).strip()
+
 class Bag:
     def __init__(self, items):
         self.items, self.bag = list(items), []
