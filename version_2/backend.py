@@ -13,6 +13,8 @@ import random
 import threading
 import queue
 import traceback
+import time
+import re
 
 def clean_for_speech(text):
     return re.sub(r"[*_#`~]", "", text).strip()
@@ -82,11 +84,13 @@ class BackEnd:
             self._last_change = time.monotonic
             return False
         current_time = time.monotonic()
-        if int(current_time) - int(self._last_change) <= self._timer:
-            self.change_state(BORED)
+        if self.state !=  BORED:
+            if int(current_time) - int(self._last_change) >= self._timer:
+                self.change_state(BORED)
+                return False
+        else:
             self.bored()
             self.patience()
-            self._last_change = time.monotonic
             return True
 
     def bored(self):
@@ -234,7 +238,7 @@ class BackEnd:
             f"Current summary: {self._summary or '(none)'}\n\nNew dialogue:\n{transcript}\n\nUpdated summary:"
         )
         try:
-            r = chat(model=SUMMARY_MODEL, messages=[{"role": "user", "content": prompt}])
+            r = chat(model=self._summary_model, messages=[{"role": "user", "content": prompt}])
             self._summary = r.message.content.strip()
         except Exception:
             traceback.print_exc()
@@ -342,7 +346,7 @@ class BackEnd:
                     music.restore()
                     videos.restore()
                     self.change_state(NOISY) if media_playing() and self.state != BORED else self.change_state(SLEEPING)
-                    self.update_summary
+                    self.update_summary()
                     self.flush(stream)
                     buffer[:] = 0
 
