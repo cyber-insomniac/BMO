@@ -78,13 +78,16 @@ class BackEnd:
     def gettin_bored(self):
         if self._timer is None:
             self.patience()
+        if self.busy():
+            self._last_change = time.monotonic
+            return False
         current_time = time.monotonic()
-        if self.state != BORED:
-            if int(current_time) - int(self._last_change) >= self._timer:
-                self.change_state(BORED)
-                self.patience()
-        else:
+        if int(current_time) - int(self._last_change) <= self._timer:
+            self.change_state(BORED)
             self.bored()
+            self.patience()
+            self._last_change = time.monotonic
+            return True
 
     def bored(self):
         if self.busy():
@@ -315,7 +318,9 @@ class BackEnd:
 
                 while not self.stop.is_set():
                     # checking if its time to get bored
-                    self.gettin_bored()
+                    if self.gettin_bored():
+                        self.flush(stream)
+                        buffer[:] = 0
                     #SLEEP
                     self.change_state(NOISY) if media_playing() and self.state != BORED else self.change_state(SLEEPING)
 
