@@ -65,6 +65,10 @@ BORED_PHRASES       = ["Hello darkness my old friend",
                        "HELP",
                        "Going to goon",
                        "bruthaaaa come back",
+                       "I'm drowning",
+                       "Let's get this party started",
+                       "Do you have meth? I need meth, please tell me you have meth.",
+                       "GRRRRRRRRRRRRRRRR"
                        ]
 
 personality = """
